@@ -443,7 +443,7 @@ func checkOCSP(ctx context.Context, hc *http.Client, cert, issuer *x509.Certific
 	if err != nil {
 		return "", err
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(httpResp.Body, 1<<20))
 	if err != nil {
 		return "", err

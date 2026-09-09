@@ -41,7 +41,7 @@ func TestLoadParsesLOTLAndMemberList(t *testing.T) {
 	mux := http.NewServeMux()
 	var srv *httptest.Server
 	mux.HandleFunc("/lotl.xml", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<?xml version="1.0"?>
+		_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <tsl:TrustServiceStatusList xmlns:tsl="http://uri.etsi.org/02231/v2#" xmlns:add="http://uri.etsi.org/02231/v2/additionaltypes#">
  <tsl:SchemeInformation>
   <tsl:SchemeTerritory>EU</tsl:SchemeTerritory>
@@ -65,7 +65,7 @@ func TestLoadParsesLOTLAndMemberList(t *testing.T) {
 </tsl:TrustServiceStatusList>`))
 	})
 	mux.HandleFunc("/nl.xml", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<?xml version="1.0"?>
+		_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <TrustServiceStatusList xmlns="http://uri.etsi.org/02231/v2#">
  <SchemeInformation><SchemeTerritory>NL</SchemeTerritory></SchemeInformation>
  <TrustServiceProviderList>
@@ -129,13 +129,13 @@ func TestCacheIsUsedWhenFresh(t *testing.T) {
 	var srv *httptest.Server
 	mux.HandleFunc("/lotl.xml", func(w http.ResponseWriter, r *http.Request) {
 		hits++
-		w.Write([]byte(`<TrustServiceStatusList xmlns="http://uri.etsi.org/02231/v2#"><SchemeInformation><SchemeTerritory>EU</SchemeTerritory>
+		_, _ = w.Write([]byte(`<TrustServiceStatusList xmlns="http://uri.etsi.org/02231/v2#"><SchemeInformation><SchemeTerritory>EU</SchemeTerritory>
 <PointersToOtherTSL><OtherTSLPointer><TSLLocation>` + srv.URL + `/x.xml</TSLLocation><AdditionalInformation>
 <OtherInformation><SchemeTerritory>XX</SchemeTerritory></OtherInformation><OtherInformation><MimeType>application/vnd.etsi.tsl+xml</MimeType></OtherInformation>
 </AdditionalInformation></OtherTSLPointer></PointersToOtherTSL></SchemeInformation></TrustServiceStatusList>`))
 	})
 	mux.HandleFunc("/x.xml", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<TrustServiceStatusList xmlns="http://uri.etsi.org/02231/v2#"><SchemeInformation><SchemeTerritory>XX</SchemeTerritory></SchemeInformation></TrustServiceStatusList>`))
+		_, _ = w.Write([]byte(`<TrustServiceStatusList xmlns="http://uri.etsi.org/02231/v2#"><SchemeInformation><SchemeTerritory>XX</SchemeTerritory></SchemeInformation></TrustServiceStatusList>`))
 	})
 	srv = httptest.NewTLSServer(mux)
 	defer srv.Close()
