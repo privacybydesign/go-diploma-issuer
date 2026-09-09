@@ -191,7 +191,7 @@ func TestParseDutchDate(t *testing.T) {
 		require.NoError(t, err, input)
 		require.Equal(t, expected, got)
 	}
-	for _, invalid := range []string{"", "31 februari 1980", "3 feb 1980", "gisteren"} {
+	for _, invalid := range []string{"", "31 februari 1980", "3 sept 1980", "gisteren"} {
 		_, err := ParseDutchDate(invalid)
 		require.Error(t, err, invalid)
 	}
