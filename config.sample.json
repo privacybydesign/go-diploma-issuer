@@ -1,0 +1,43 @@
+{
+  "server_config": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "enable_api_docs": true
+  },
+  "irma_server_url": "https://is.staging.yivi.app",
+  "issuer_id": "diploma_issuer",
+  "jwt_private_key_path": "/secrets/priv.pem",
+  "sd_jwt_batch_size": 25,
+  "credential_validity_days": 365,
+  "credentials": {
+    "diploma": {
+      "full_credential": "pbdf-staging.pbdf.diploma"
+    }
+  },
+  "identity_credentials": {
+    "brp": "pbdf-staging.gemeente.personalData",
+    "passport": "pbdf-staging.pbdf.passport",
+    "id_card": "pbdf-staging.pbdf.idcard",
+    "driving_licence": "pbdf-staging.pbdf.drivinglicence"
+  },
+  "trust": {
+    "source": "eutl",
+    "territories": ["NL", "RO"],
+    "cache_dir": "/secrets/eutl-cache",
+    "refresh_hours": 24,
+    "fallback_to_pinned": true
+  },
+  "validation": {
+    "ocsp": false
+  },
+  "max_upload_size_bytes": 5242880,
+  "max_files": 10,
+  "storage_type": "memory",
+  "redis_config": {
+    "host": "redis",
+    "port": 6379,
+    "password": "password",
+    "namespace": "diploma-issuer"
+  },
+  "log_level": "info"
+}

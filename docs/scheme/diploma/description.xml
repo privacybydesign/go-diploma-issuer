@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Proposed credential type for the Yivi scheme (pbdf-staging / pbdf), issuer pbdf.
+  Place this file at <scheme>/pbdf/Issues/diploma/description.xml (with a logo.png)
+  and reference it as "<scheme>.pbdf.diploma" in credentials.diploma.full_credential.
+
+  One credential is issued per diploma extract; a holder with several diplomas
+  gets several cards, so ShouldBeSingleton is false.
+
+  The attribute names must match backend/jwt_creator.go (DiplomaAttributes).
+-->
+<IssueSpecification version="4">
+  <Name>
+    <en>Diploma</en>
+    <nl>Diploma</nl>
+  </Name>
+  <ShortName>
+    <en>Diploma</en>
+    <nl>Diploma</nl>
+  </ShortName>
+  <SchemeManager>pbdf</SchemeManager>
+  <IssuerID>pbdf</IssuerID>
+  <CredentialID>diploma</CredentialID>
+  <Description>
+    <en>A diploma from the Dutch diploma register, taken from the digitally signed extract of "Mijn diploma's" (DUO), verified and bound to your identity.</en>
+    <nl>Een diploma uit het Nederlandse diplomaregister, overgenomen uit het digitaal ondertekende uittreksel van "Mijn diploma's" (DUO), gecontroleerd en gekoppeld aan je identiteit.</nl>
+  </Description>
+  <ShouldBeSingleton>false</ShouldBeSingleton>
+  <IssueURL>
+    <en>https://diploma.yivi.app/en</en>
+    <nl>https://diploma.yivi.app/nl</nl>
+  </IssueURL>
+  <Attributes>
+    <Attribute id="documentType">
+      <Name><en>Document</en><nl>Document</nl></Name>
+      <Description><en>Kind of document in the register: Diploma or Getuigschrift (certificate)</en><nl>Soort document in het register: Diploma of Getuigschrift</nl></Description>
+    </Attribute>
+    <Attribute id="qualification">
+      <Name><en>Qualification</en><nl>Opleiding</nl></Name>
+      <Description><en>Name of the qualification as registered, e.g. "Hoger algemeen voortgezet onderwijs" or "HBO Bachelor Informatica"</en><nl>Naam van de opleiding zoals geregistreerd, bijv. "Hoger algemeen voortgezet onderwijs" of "HBO Bachelor Informatica"</nl></Description>
+    </Attribute>
+    <Attribute id="profile" optional="true">
+      <Name><en>Profile</en><nl>Profiel</nl></Name>
+      <Description><en>Profile(s) of a secondary education diploma, e.g. "Natuur en Techniek"; empty for other qualifications</en><nl>Profiel(en) van een vo-diploma, bijv. "Natuur en Techniek"; leeg bij andere opleidingen</nl></Description>
+    </Attribute>
+    <Attribute id="fullName">
+      <Name><en>Name</en><nl>Naam</nl></Name>
+      <Description><en>Name of the holder as printed on the extract (given names and surname)</en><nl>Naam van de houder zoals op het uittreksel (voornamen en achternaam)</nl></Description>
+    </Attribute>
+    <Attribute id="dateOfBirth">
+      <Name><en>Date of birth</en><nl>Geboortedatum</nl></Name>
+      <Description><en>Date of birth of the holder (YYYY-MM-DD)</en><nl>Geboortedatum van de houder (JJJJ-MM-DD)</nl></Description>
+    </Attribute>
+    <Attribute id="institution">
+      <Name><en>Institution</en><nl>Instelling</nl></Name>
+      <Description><en>Educational institution that awarded the diploma</en><nl>Onderwijsinstelling die het diploma heeft uitgegeven</nl></Description>
+    </Attribute>
+    <Attribute id="placeOfIssue">
+      <Name><en>Place</en><nl>Plaats</nl></Name>
+      <Description><en>Place where the diploma was awarded</en><nl>Plaats waar het diploma is uitgegeven</nl></Description>
+    </Attribute>
+    <Attribute id="dateAwarded">
+      <Name><en>Date awarded</en><nl>Datum behaald</nl></Name>
+      <Description><en>Date the diploma was awarded (YYYY-MM-DD)</en><nl>Datum waarop het diploma is behaald (JJJJ-MM-DD)</nl></Description>
+    </Attribute>
+    <Attribute id="nlqfLevel" optional="true">
+      <Name><en>NLQF level</en><nl>NLQF-niveau</nl></Name>
+      <Description><en>Level in the Dutch qualifications framework, e.g. "4"; empty when the extract does not print a level</en><nl>Niveau in het Nederlands kwalificatieraamwerk, bijv. "4"; leeg als het uittreksel geen niveau vermeldt</nl></Description>
+    </Attribute>
+    <Attribute id="eqfLevel" optional="true">
+      <Name><en>EQF level</en><nl>EQF-niveau</nl></Name>
+      <Description><en>Level in the European qualifications framework, e.g. "4"; empty when the extract does not print a level</en><nl>Niveau in het Europees kwalificatieraamwerk, bijv. "4"; leeg als het uittreksel geen niveau vermeldt</nl></Description>
+    </Attribute>
+    <Attribute id="documentNumber">
+      <Name><en>Extract number</en><nl>Nummer uittreksel</nl></Name>
+      <Description><en>Number DUO prints on the extract; can be used for the manual check at duo.nl/diplomacontrole</en><nl>Nummer dat DUO op het uittreksel afdrukt; te gebruiken voor de handmatige controle via duo.nl/diplomacontrole</nl></Description>
+    </Attribute>
+    <Attribute id="downloadDate">
+      <Name><en>Extract date</en><nl>Datum uittreksel</nl></Name>
+      <Description><en>Day the extract was downloaded from DUO (YYYY-MM-DD)</en><nl>Dag waarop het uittreksel bij DUO is gedownload (JJJJ-MM-DD)</nl></Description>
+    </Attribute>
+    <Attribute id="gradeList" displayHint="yesno">
+      <Name><en>List of grades included</en><nl>Cijferlijst opgenomen</nl></Name>
+      <Description><en>Whether the extract included the list of grades (cijferlijst)</en><nl>Of het uittreksel de cijferlijst bevatte</nl></Description>
+    </Attribute>
+    <Attribute id="identitySource">
+      <Name><en>Identity verified with</en><nl>Identiteit geverifieerd met</nl></Name>
+      <Description><en>Credential used to bind the diploma to the holder: brp, passport, id_card or driving_licence</en><nl>Gegeven waarmee het diploma aan de houder is gekoppeld: brp, passport, id_card of driving_licence</nl></Description>
+    </Attribute>
+  </Attributes>
+</IssueSpecification>

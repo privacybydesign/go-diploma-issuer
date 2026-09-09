@@ -1,0 +1,453 @@
+basePath: /api
+definitions:
+  models.CheckInfo:
+    properties:
+      detail:
+        description: Technical detail of the outcome
+        example: 3 certificates, anchor "Staat der Nederlanden Root CA - G3"
+        type: string
+      id:
+        description: Stable identifier, e.g. certificate_chain
+        example: certificate_chain
+        type: string
+      name:
+        description: Short English label
+        example: certificate chain to trust anchor
+        type: string
+      ok:
+        example: true
+        type: boolean
+    type: object
+  models.DisclosureSessionResponse:
+    properties:
+      frontendRequest:
+        description: Frontend session request (pairing options) as produced by the
+          IRMA server
+        type: object
+      sessionPtr:
+        $ref: '#/definitions/models.SessionPointer'
+    type: object
+  models.DocumentInfo:
+    properties:
+      date_awarded:
+        description: Date the diploma was awarded, YYYY-MM-DD
+        example: "2009-07-01"
+        type: string
+      date_of_birth:
+        description: Date of birth, YYYY-MM-DD
+        example: "1980-02-03"
+        type: string
+      document_number:
+        description: Number DUO prints in the footer of the extract
+        example: "2896311"
+        type: string
+      document_type:
+        description: '"Diploma" or "Getuigschrift"'
+        example: Diploma
+        type: string
+      download_date:
+        description: Day the extract was downloaded from DUO, YYYY-MM-DD
+        example: "2026-09-03"
+        type: string
+      eqf_level:
+        description: EQF level, if printed
+        example: "4"
+        type: string
+      full_name:
+        description: Holder as printed (given names and surname in one line)
+        example: Anna Maria van der Berg
+        type: string
+      has_grade_list:
+        description: True when the extract includes the list of grades
+        example: false
+        type: boolean
+      institution:
+        description: Institution that awarded the diploma
+        example: Hogeschool van Arnhem en Nijmegen
+        type: string
+      nlqf_level:
+        description: NLQF level, if printed
+        example: "4"
+        type: string
+      pages:
+        example: 1
+        type: integer
+      place_of_issue:
+        example: Arnhem
+        type: string
+      profiles:
+        description: Profiles, if printed
+        example:
+        - Natuur en Techniek
+        items:
+          type: string
+        type: array
+      qualification:
+        description: Name of the qualification
+        example: Hoger algemeen voortgezet onderwijs
+        type: string
+    type: object
+  models.ErrorResponse:
+    properties:
+      error:
+        description: Stable machine readable error key, e.g. "error:validation-failed"
+        example: error:validation-failed
+        type: string
+      files:
+        description: Per-file outcome when an upload was refused because no file was
+          accepted
+        items:
+          $ref: '#/definitions/models.FileResult'
+        type: array
+      identity:
+        allOf:
+        - $ref: '#/definitions/models.IdentityMatchInfo'
+        description: Identity comparison outcome when the error concerns the identity
+          match
+      message:
+        description: Human readable explanation (English)
+        example: none of the uploaded files was accepted
+        type: string
+    type: object
+  models.FileResult:
+    properties:
+      accepted:
+        description: True when the file was accepted into the session
+        example: true
+        type: boolean
+      document:
+        allOf:
+        - $ref: '#/definitions/models.DocumentInfo'
+        description: Parsed data, present when the file was accepted
+      error:
+        description: Error key when the file was rejected, e.g. error:validation-failed
+        example: error:validation-failed
+        type: string
+      filename:
+        description: File name as uploaded
+        example: Hoger algemeen voortgezet onderwijs.pdf
+        type: string
+      message:
+        description: Human readable explanation when rejected (English)
+        example: the signature of the document could not be verified
+        type: string
+      validation:
+        allOf:
+        - $ref: '#/definitions/models.ValidationInfo'
+        description: Verification outcome, present as soon as the signature was checked
+    type: object
+  models.HealthResponse:
+    properties:
+      ok:
+        description: True if the service is healthy
+        example: true
+        type: boolean
+    type: object
+  models.IdentityMatchInfo:
+    properties:
+      date_of_birth_match:
+        example: true
+        type: boolean
+      given_names_match:
+        example: true
+        type: boolean
+      matched:
+        example: true
+        type: boolean
+      reasons:
+        example:
+        - surname differs
+        items:
+          type: string
+        type: array
+      source:
+        description: 'Which credential the identity came from: brp, passport, id_card
+          or driving_licence'
+        example: passport
+        type: string
+      surname_match:
+        example: true
+        type: boolean
+    type: object
+  models.IssuanceResponse:
+    properties:
+      credentials:
+        description: Number of diploma credentials in the issuance request
+        example: 2
+        type: integer
+      identity:
+        allOf:
+        - $ref: '#/definitions/models.IdentityMatchInfo'
+        description: Outcome of the identity comparison that authorised the issuance
+      irma_server_url:
+        description: URL of the IRMA server for credential issuance
+        example: https://irma.example.com
+        type: string
+      jwt:
+        description: Signed JWT containing the IRMA issuance request, one credential
+          per diploma
+        example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    type: object
+  models.PersonInfo:
+    properties:
+      date_of_birth:
+        description: Date of birth, YYYY-MM-DD
+        example: "1980-02-03"
+        type: string
+      full_name:
+        example: Anna Maria van der Berg
+        type: string
+    type: object
+  models.SessionPointer:
+    properties:
+      irmaqr:
+        description: Session type
+        example: disclosing
+        type: string
+      u:
+        description: Session URL on the IRMA server
+        example: https://irma.example.com/irma/session/abc123
+        type: string
+    type: object
+  models.SessionRequest:
+    properties:
+      session_id:
+        description: Session identifier from /diploma/upload
+        example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+        type: string
+    type: object
+  models.UploadResponse:
+    properties:
+      accepted:
+        description: Number of accepted files (diplomas that will be issued)
+        example: 2
+        type: integer
+      files:
+        description: Outcome per uploaded file, in upload order
+        items:
+          $ref: '#/definitions/models.FileResult'
+        type: array
+      person:
+        allOf:
+        - $ref: '#/definitions/models.PersonInfo'
+        description: The holder named on the accepted extracts
+      rejected:
+        description: Number of rejected files
+        example: 0
+        type: integer
+      session_id:
+        description: Session identifier to use in the follow-up requests (32 hex characters)
+        example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+        type: string
+    type: object
+  models.ValidationInfo:
+    properties:
+      checks:
+        items:
+          $ref: '#/definitions/models.CheckInfo'
+        type: array
+      key:
+        description: '"valid", or the id of the first failed check'
+        example: valid
+        type: string
+      signer:
+        description: Subject of the signing certificate
+        example: CN=Dienst Uitvoering Onderwijs,O=Dienst Uitvoering Onderwijs (DUO),C=NL
+        type: string
+      signing_time:
+        description: Time of signing, RFC 3339
+        example: "2026-09-03T12:34:56Z"
+        type: string
+      timestamp_trusted:
+        description: True when the signing time comes from a trusted RFC 3161 timestamp
+        example: true
+        type: boolean
+      trust_anchor:
+        description: Provenance of the trust anchor the signer chains to
+        example: 'EU trusted list NL: KPN B.V., service "KPN BV PKIoverheid Organisatie
+          Services CA - G3" (CA/QC)'
+        type: string
+      valid:
+        description: 'True when every check passed: the PDF is authentic and unaltered'
+        example: true
+        type: boolean
+    type: object
+info:
+  contact:
+    name: Privacy by Design Foundation
+  description: |-
+    API for verifying digital diploma extracts from DUO (Dienst Uitvoering Onderwijs, "Mijn diploma's") and issuing them as privacy-preserving Yivi credentials.
+    The service verifies the PAdES signature DUO puts on every extract (certification signature, RFC 3161 timestamp, certificate chain to a qualified trust service on the EU Trusted Lists, DUO as signer), reads the printed data (qualification, holder, institution, date), lets the holder prove their identity with a BRP, passport, ID card or driving licence credential in the Yivi app, checks that this identity matches the holder named on the extracts and then issues one diploma credential per extract (IRMA and SD-JWT VC formats) over the IRMA protocol. Several extracts of the same holder can be uploaded and issued at once.
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  title: Go Diploma Issuer API
+  version: "1.0"
+paths:
+  /diploma/issue:
+    post:
+      consumes:
+      - application/json
+      description: Fetches the result of the disclosure session, compares the disclosed
+        name and date of birth with the holder named on the extracts and, when they
+        match, returns a signed IRMA issuance request with one diploma credential
+        per accepted extract (IRMA and SD-JWT VC formats, issued over the IRMA protocol
+        in a single session). On a mismatch the disclosure is discarded and the user
+        may disclose again with another credential; the uploaded extracts stay available
+        until the session expires.
+      parameters:
+      - description: Session from /diploma/upload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.IssuanceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: the disclosed identity does not match the holder of the extracts,
+            or the disclosure proof is invalid
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: unknown or expired session
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: the disclosure session has not finished (or was not started)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "502":
+          description: the IRMA server could not be reached
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Verify identity and issue diploma credentials
+      tags:
+      - Diploma
+  /diploma/start-disclosure:
+    post:
+      consumes:
+      - application/json
+      description: 'Starts a Yivi disclosure session in which the holder proves their
+        identity with one of four credentials: BRP personal data (gemeente.personalData),
+        passport, ID card or driving licence. The Yivi app lets the user pick. The
+        response is the IRMA session package that yivi-frontend consumes directly
+        (use it as the response of the `session.start` request with the default mapping
+        and `result: false`). The requestor token is kept server side.'
+      parameters:
+      - description: Session from /diploma/upload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DisclosureSessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: unknown or expired session
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "502":
+          description: the IRMA server did not accept the session
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Start identity disclosure
+      tags:
+      - Diploma
+  /diploma/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 'Accepts one or more diploma extract PDFs from DUO''s "Mijn diploma''s"
+        (repeat the multipart form field "file", at most max_files per request). Every
+        file is verified cryptographically: the PDF must carry a single certification
+        signature that covers the whole file, the signature must be valid, timestamped
+        by a qualified timestamp authority and made with a qualified electronic seal
+        certificate of DUO that chains to a trust service on the EU Trusted Lists.
+        Only then is the printed data read (qualification, holder, date of birth,
+        institution, award date, level). All accepted extracts must name the same
+        holder. Files that fail are reported per file; as long as one file is accepted
+        the request succeeds and a session is created for the accepted files. The
+        session expires after one hour.'
+      parameters:
+      - description: One or more diploma extract PDFs downloaded from Mijn diploma's
+          (DUO)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: at least one file was accepted; check files[].accepted for
+            the rest
+          schema:
+            $ref: '#/definitions/models.UploadResponse'
+        "400":
+          description: no file, too many files, or none of the files is a PDF / a
+            diploma extract (per-file detail in files)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "413":
+          description: a file or the request exceeds the size limit
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "422":
+          description: none of the files was accepted because the signature verification
+            failed (per-file detail in files)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "503":
+          description: the trust anchors (EU trusted lists) are not available, so
+            signatures cannot be verified right now
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Upload and verify diploma extracts
+      tags:
+      - Diploma
+  /health:
+    get:
+      description: Returns the health status of the API service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.HealthResponse'
+      summary: Health check
+      tags:
+      - Health
+swagger: "2.0"

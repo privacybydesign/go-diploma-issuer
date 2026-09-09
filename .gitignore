@@ -1,0 +1,28 @@
+.secrets
+.DS_Store
+frontend/build
+frontend/node_modules
+info.log
+error.log
+
+vendor
+
+.vite
+# Node files
+node_modules/
+build/
+
+secrets/
+local-secrets/
+.env
+.envrc
+
+.claude
+
+# EU trusted list cache of the CLI / local runs
+eutl-cache/
+
+# Genuine DUO extracts used by the tests and the expected values read from them
+# (personal data). The tests skip when these are absent.
+backend/test-data/*.pdf
+backend/test-data/expected.json
