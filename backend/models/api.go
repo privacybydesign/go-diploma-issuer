@@ -160,6 +160,12 @@ type IssuanceResponse struct {
 	Identity IdentityMatchInfo `json:"identity"`
 }
 
+// ConfigResponse tells the frontend how the service is configured.
+type ConfigResponse struct {
+	// Sitekey of the Cloudflare Turnstile widget to render on the upload page. Empty when the bot check is disabled.
+	TurnstileSiteKey string `json:"turnstile_site_key" example:"0x4AAAAAAEskYIZQOLbu1QvE"`
+}
+
 // HealthResponse contains the health status of the service
 type HealthResponse struct {
 	// True if the service is healthy

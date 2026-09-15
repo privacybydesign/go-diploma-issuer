@@ -18,6 +18,14 @@ definitions:
         example: true
         type: boolean
     type: object
+  models.ConfigResponse:
+    properties:
+      turnstile_site_key:
+        description: Sitekey of the Cloudflare Turnstile widget to render on the upload
+          page. Empty when the bot check is disabled.
+        example: 0x4AAAAAAEskYIZQOLbu1QvE
+        type: string
+    type: object
   models.DisclosureSessionResponse:
     properties:
       frontendRequest:
@@ -285,6 +293,21 @@ info:
   title: Go Diploma Issuer API
   version: "1.0"
 paths:
+  /config:
+    get:
+      description: 'Returns the settings the frontend needs: the Cloudflare Turnstile
+        sitekey to render the bot check on the upload page. The sitekey is empty when
+        the Turnstile check is disabled; the frontend then uploads without a token.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ConfigResponse'
+      summary: Frontend configuration
+      tags:
+      - Config
   /diploma/issue:
     post:
       consumes:
@@ -395,7 +418,10 @@ paths:
         institution, award date, level). All accepted extracts must name the same
         holder. Files that fail are reported per file; as long as one file is accepted
         the request succeeds and a session is created for the accepted files. The
-        session expires after one hour.'
+        session expires after one hour. When the Cloudflare Turnstile check is enabled
+        (see /config), the request must also carry a fresh Turnstile token in the
+        multipart field "cf-turnstile-response"; the token is redeemed at Cloudflare
+        before the files are looked at and can be used only once.'
       parameters:
       - description: One or more diploma extract PDFs downloaded from Mijn diploma's
           (DUO)
@@ -403,6 +429,11 @@ paths:
         name: file
         required: true
         type: file
+      - description: Cloudflare Turnstile token from the widget on the upload page
+          (required when the check is enabled)
+        in: formData
+        name: cf-turnstile-response
+        type: string
       produces:
       - application/json
       responses:
@@ -414,6 +445,11 @@ paths:
         "400":
           description: no file, too many files, or none of the files is a PDF / a
             diploma extract (per-file detail in files)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: the Turnstile token is missing, invalid, already used or not
+            minted for this site
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "413":

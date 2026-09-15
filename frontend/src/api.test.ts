@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, UploadCancelled, errorKeyToTranslationKey, isVerificationUnavailable, uploadDiplomas } from './api';
+import {
+  ApiError,
+  TURNSTILE_TOKEN_FIELD,
+  UploadCancelled,
+  errorKeyToTranslationKey,
+  fetchConfig,
+  isVerificationUnavailable,
+  uploadDiplomas,
+} from './api';
 
 describe('errorKeyToTranslationKey', () => {
   it('maps backend error keys onto i18n keys', () => {
@@ -67,6 +75,27 @@ describe('uploadDiplomas', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/diploma/upload');
   });
 
+  it('uploads without a Turnstile token when the check is off', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ session_id: 's1', files: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await uploadDiplomas(files);
+
+    const form = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
+    expect(form.has(TURNSTILE_TOKEN_FIELD)).toBe(false);
+  });
+
+  it('sends the Turnstile token along with the files', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ session_id: 's1', files: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await uploadDiplomas(files, undefined, 'token-1');
+
+    const form = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
+    expect(form.get(TURNSTILE_TOKEN_FIELD)).toBe('token-1');
+    expect(form.getAll('file')).toHaveLength(2);
+  });
+
   it('turns an error response into an ApiError with the per-file detail', async () => {
     const body = {
       error: 'error:validation-failed',
@@ -94,5 +123,27 @@ describe('uploadDiplomas', () => {
     );
 
     await expect(uploadDiplomas(files, controller.signal)).rejects.toBeInstanceOf(UploadCancelled);
+  });
+});
+
+describe('fetchConfig', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns the Turnstile sitekey', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ turnstile_site_key: '0x4AAA' }), { status: 200 })));
+    await expect(fetchConfig()).resolves.toEqual({ turnstile_site_key: '0x4AAA' });
+  });
+
+  it('treats an unreachable or broken endpoint as "no Turnstile"', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 500 })));
+    await expect(fetchConfig()).resolves.toEqual({ turnstile_site_key: '' });
+
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('network'); }));
+    await expect(fetchConfig()).resolves.toEqual({ turnstile_site_key: '' });
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ turnstile_site_key: 42 }), { status: 200 })));
+    await expect(fetchConfig()).resolves.toEqual({ turnstile_site_key: '' });
   });
 });

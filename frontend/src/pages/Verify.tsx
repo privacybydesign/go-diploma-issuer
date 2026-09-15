@@ -78,7 +78,8 @@ export default function VerifyPage() {
     });
     try {
       await issuance.start();
-      setUpload(undefined);
+      // The done page clears the flow state; clearing it here would trigger
+      // the redirect above before the navigation lands.
       navigate(`/${i18n.language}/done`, { state: { count: result.credentials } });
     } catch (e) {
       setPhase('idle');

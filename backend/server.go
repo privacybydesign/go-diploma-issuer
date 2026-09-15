@@ -49,6 +49,7 @@ const (
 	ErrorDisclosureInvalid = "error:disclosure-invalid"
 	ErrorIdentityMismatch  = "error:identity-mismatch"
 	ErrorIrmaServer        = "error:irma-server"
+	ErrorBotCheckFailed    = "error:bot-check-failed"
 )
 
 const (
@@ -80,6 +81,10 @@ type ServerState struct {
 	identityCredentials IdentityCredentials
 	maxUploadSize       int64
 	maxFiles            int
+	// Cloudflare Turnstile check on the upload endpoint; nil disables it.
+	turnstile TurnstileVerifier
+	// Sitekey handed to the frontend so it can render the widget.
+	turnstileSiteKey string
 }
 
 type SpaHandler struct {
@@ -156,6 +161,9 @@ func NewServer(state *ServerState, config ServerConfig) (*Server, error) {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/api/health", handleHealth).Methods(http.MethodGet)
+	router.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
+		handleConfig(state, w, r)
+	}).Methods(http.MethodGet)
 
 	router.HandleFunc("/api/diploma/upload", func(w http.ResponseWriter, r *http.Request) {
 		handleUpload(state, w, r)
@@ -210,6 +218,23 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleConfig tells the frontend how the service is configured
+// @Summary Frontend configuration
+// @Description Returns the settings the frontend needs: the Cloudflare Turnstile sitekey to render the bot check on the upload page. The sitekey is empty when the Turnstile check is disabled; the frontend then uploads without a token.
+// @Tags Config
+// @Produce json
+// @Success 200 {object} models.ConfigResponse
+// @Router /config [get]
+func handleConfig(state *ServerState, w http.ResponseWriter, r *http.Request) {
+	response := models.ConfigResponse{}
+	if state.turnstile != nil {
+		response.TurnstileSiteKey = state.turnstileSiteKey
+	}
+	if err := writeJSON(w, http.StatusOK, response); err != nil {
+		slog.Error("failed to write config response", "error", err)
+	}
+}
+
 // fileOutcome is the result of processing one uploaded file: the API facing
 // FileResult plus, when accepted, the parsed document.
 type fileOutcome struct {
@@ -235,13 +260,15 @@ func rejected(filename string, status int, errorKey, message string, validation 
 
 // handleUpload verifies and parses one or more uploaded diploma extracts
 // @Summary Upload and verify diploma extracts
-// @Description Accepts one or more diploma extract PDFs from DUO's "Mijn diploma's" (repeat the multipart form field "file", at most max_files per request). Every file is verified cryptographically: the PDF must carry a single certification signature that covers the whole file, the signature must be valid, timestamped by a qualified timestamp authority and made with a qualified electronic seal certificate of DUO that chains to a trust service on the EU Trusted Lists. Only then is the printed data read (qualification, holder, date of birth, institution, award date, level). All accepted extracts must name the same holder. Files that fail are reported per file; as long as one file is accepted the request succeeds and a session is created for the accepted files. The session expires after one hour.
+// @Description Accepts one or more diploma extract PDFs from DUO's "Mijn diploma's" (repeat the multipart form field "file", at most max_files per request). Every file is verified cryptographically: the PDF must carry a single certification signature that covers the whole file, the signature must be valid, timestamped by a qualified timestamp authority and made with a qualified electronic seal certificate of DUO that chains to a trust service on the EU Trusted Lists. Only then is the printed data read (qualification, holder, date of birth, institution, award date, level). All accepted extracts must name the same holder. Files that fail are reported per file; as long as one file is accepted the request succeeds and a session is created for the accepted files. The session expires after one hour. When the Cloudflare Turnstile check is enabled (see /config), the request must also carry a fresh Turnstile token in the multipart field "cf-turnstile-response"; the token is redeemed at Cloudflare before the files are looked at and can be used only once.
 // @Tags Diploma
 // @Accept multipart/form-data
 // @Produce json
 // @Param file formData file true "One or more diploma extract PDFs downloaded from Mijn diploma's (DUO)"
+// @Param cf-turnstile-response formData string false "Cloudflare Turnstile token from the widget on the upload page (required when the check is enabled)"
 // @Success 200 {object} models.UploadResponse "at least one file was accepted; check files[].accepted for the rest"
 // @Failure 400 {object} models.ErrorResponse "no file, too many files, or none of the files is a PDF / a diploma extract (per-file detail in files)"
+// @Failure 403 {object} models.ErrorResponse "the Turnstile token is missing, invalid, already used or not minted for this site"
 // @Failure 413 {object} models.ErrorResponse "a file or the request exceeds the size limit"
 // @Failure 422 {object} models.ErrorResponse "none of the files was accepted because the signature verification failed (per-file detail in files)"
 // @Failure 503 {object} models.ErrorResponse "the trust anchors (EU trusted lists) are not available, so signatures cannot be verified right now"
@@ -272,6 +299,16 @@ func handleUpload(state *ServerState, w http.ResponseWriter, r *http.Request) {
 			_ = r.MultipartForm.RemoveAll()
 		}
 	}()
+
+	// Bot check first: the token is redeemed at Cloudflare before any work
+	// is spent on the PDFs. Tokens are single-use, so a replayed request is
+	// refused here as well.
+	if state.turnstile != nil {
+		if err := state.turnstile.Verify(r.Context(), r.FormValue(TurnstileTokenField), clientIP(r)); err != nil {
+			respondWithErr(w, http.StatusForbidden, ErrorBotCheckFailed, "the bot check (Cloudflare Turnstile) did not pass", err, "endpoint", endpoint)
+			return
+		}
+	}
 
 	headers := r.MultipartForm.File["file"]
 	if len(headers) == 0 {

@@ -13,11 +13,13 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 // Define the props for the provider
 interface AppProviderProps {
   children: ReactNode;
+  /** Initial state, for tests that render a page halfway through the flow. */
+  initialUpload?: UploadResponse;
 }
 
 // Provider component
-export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  const [upload, setUpload] = useState<UploadResponse | undefined>();
+export const AppProvider: React.FC<AppProviderProps> = ({ children, initialUpload }) => {
+  const [upload, setUpload] = useState<UploadResponse | undefined>(initialUpload);
 
   return (
     <AppContext.Provider value={{ upload, setUpload }}>

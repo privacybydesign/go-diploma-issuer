@@ -5,7 +5,7 @@ The Go Diploma Issuer turns the digital **diploma extracts** of DUO (Dienst Uitv
 ## How it works
 
 1. **Get the extracts.** The holder logs in to [Mijn DUO](https://mijndiplomas.nl) with DigiD, opens *Mijn studies en diploma's* and downloads the extract (uittreksel) of every diploma as a PDF. The frontend explains this step by step and links to DUO's [Uittreksel diploma](https://duo.nl/particulier/uittreksel-diplomagegevens-downloaden.jsp) page. Only the holder can download these extracts; they are free.
-2. **Upload.** The holder uploads one or more extract PDFs at once. The backend verifies every PDF itself, without calling DUO: the **PAdES signature** DUO puts on the extract must be a single certification signature that covers the whole file, be cryptographically valid, carry an RFC 3161 timestamp from a qualified timestamp authority, and be made with a qualified electronic seal certificate of DUO that chains to a qualified trust service on the **EU Trusted Lists** (eIDAS). Only then is the PDF read with PDFium running in WebAssembly (pure Go): qualification, holder, date of birth, institution, place and date of award, NLQF/EQF level and the extract number.
+2. **Upload.** The holder uploads one or more extract PDFs at once. The upload page carries a [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) bot check; the backend redeems the single-use Turnstile token at Cloudflare before it does anything with the files. It then verifies every PDF itself, without calling DUO: the **PAdES signature** DUO puts on the extract must be a single certification signature that covers the whole file, be cryptographically valid, carry an RFC 3161 timestamp from a qualified timestamp authority, and be made with a qualified electronic seal certificate of DUO that chains to a qualified trust service on the **EU Trusted Lists** (eIDAS). Only then is the PDF read with PDFium running in WebAssembly (pure Go): qualification, holder, date of birth, institution, place and date of award, NLQF/EQF level and the extract number.
 3. **Identity.** The holder proves who they are in the Yivi app. The disclosure request offers four alternatives, the app lets the user pick: BRP personal data (`gemeente.personalData`), passport, ID card or driving licence. The backend runs this session itself so it can read the result.
 4. **Match.** The disclosed name and date of birth are compared with the holder named on the extracts (case- and diacritic-insensitive, surname with or without prefix in either order, first given name suffices). No match, no credentials; the holder may disclose again with another credential.
 5. **Issue.** On a match the backend signs one IRMA issuance request containing a diploma credential per extract and the frontend hands it to the Yivi app.
@@ -99,6 +99,11 @@ Create `local-secrets/config.json` (the folder is git-ignored); `config.sample.j
     "fallback_to_pinned": true
   },
   "validation": { "ocsp": false },
+  "turnstile": {
+    "site_key": "0x4AAAAAAEskYIZQOLbu1QvE",
+    "secret": "",
+    "hostnames": ["localhost", "127.0.0.1"]
+  },
   "max_upload_size_bytes": 5242880,
   "max_files": 10,
   "storage_type": "memory",
@@ -110,9 +115,24 @@ Create `local-secrets/config.json` (the folder is git-ignored); `config.sample.j
 - `identity_credentials` are the full credential type identifiers of the identity credentials; their attribute names (`firstnames`/`prefix`/`familyname`/`dateofbirth` for BRP, `firstName`/`lastName`/`dateOfBirth` for the documents) are fixed by the scheme. `passport`, `id_card` and `driving_licence` are required. `brp` is optional: leave the key out and the disclosure request only offers the three documents.
 - `trust` configures where the signature trust anchors come from, see [Where the trust comes from](#where-the-trust-comes-from). Loading the EU lists at startup takes a few seconds when the cache is cold.
 - `validation.ocsp` enables the online revocation check of DUO's signing certificate per upload (default off).
+- `turnstile` configures the Cloudflare Turnstile bot check on the upload endpoint, see [Bot protection with Cloudflare Turnstile](#bot-protection-with-cloudflare-turnstile). The check is on as soon as a secret is available, either in `turnstile.secret` or in the `TURNSTILE_SECRET` environment variable (the variable wins). Without a secret the backend logs a warning at startup and accepts uploads without a token.
 - `max_upload_size_bytes` bounds one PDF (default 5 MiB; a real extract is about 600 kB), `max_files` the number of extracts per upload (default 10).
 - `storage_type` is `memory`, `redis` (with `redis_config`) or `redis_sentinel` (with `redis_sentinel_config`). Use Redis when running more than one instance.
 - `sd_jwt_batch_size` is the number of SD-JWT VCs issued alongside each IRMA credential.
+
+### Bot protection with Cloudflare Turnstile
+
+Every upload costs up to `max_files` signature verifications (with OCSP calls when enabled) and PDF parses, so the upload endpoint is protected with [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/). The flow is the canonical one: the widget on the upload page produces a single-use token, the frontend sends it along with the PDFs as the multipart field `cf-turnstile-response`, and the backend redeems it at Cloudflare's siteverify endpoint before it looks at the files. The other endpoints need a `session_id` that only a successful upload hands out, so gating the upload gates the whole flow.
+
+The backend accepts a token only when siteverify reports `success`, the action `diploma-upload` (the action the frontend renders the widget with) and a hostname from `turnstile.hostnames`. Anything else, including an unreachable siteverify, is answered with `403 error:bot-check-failed` and the frontend asks the user to reload and try again. Tokens are single-use, so the frontend fetches a fresh token for every upload attempt.
+
+| Key | Meaning |
+|-----|---------|
+| `turnstile.site_key` | Sitekey of the widget. Public; the frontend fetches it from `GET /api/config`. Empty in that response means the check is off and the frontend uploads without a token. |
+| `turnstile.secret` | Secret of the widget. Leave empty and set `TURNSTILE_SECRET` in the environment when the platform can inject secrets; otherwise put it in `local-secrets/config.json`, which is git-ignored. Never commit it. |
+| `turnstile.hostnames` | Hostnames on which the frontend is served. Siteverify reports the hostname of the page that solved the challenge and the token is rejected unless it is listed. A production configuration must not list `localhost` or `127.0.0.1`. |
+
+The widget is created in the Cloudflare dashboard (Turnstile, managed mode) with the same hostnames; the sitekey and secret come from there. During development the Vite dev server on `localhost:3000` proxies `/api` to the backend, so `localhost` in both the widget and `turnstile.hostnames` covers it.
 
 ### Running the application
 
@@ -171,7 +191,8 @@ go generate ./...
 
 | Endpoint | Purpose |
 |----------|---------|
-| `POST /api/diploma/upload` (multipart `file`, repeated) | Verify the signature of every extract and read it; returns a `session_id`, the holder and a per-file result (`files[]` with `accepted`, `validation`, `document` or `error`). 4xx/422 with `files` when no file was accepted; 503 `error:validation-service-unavailable` when the trust anchors are not available. |
+| `GET /api/config` | Frontend settings: the Turnstile sitekey (empty when the bot check is off). |
+| `POST /api/diploma/upload` (multipart `file`, repeated, `cf-turnstile-response`) | Redeem the Turnstile token, verify the signature of every extract and read it; returns a `session_id`, the holder and a per-file result (`files[]` with `accepted`, `validation`, `document` or `error`). `403 error:bot-check-failed` when the token is missing, used or not minted for this site; 4xx/422 with `files` when no file was accepted; 503 `error:validation-service-unavailable` when the trust anchors are not available. |
 | `POST /api/diploma/start-disclosure` `{session_id}` | Start the identity disclosure; returns the IRMA session package (`sessionPtr`, `frontendRequest`) for yivi-frontend. |
 | `POST /api/diploma/issue` `{session_id}` | Fetch the disclosure result, compare it with the extracts and return the signed issuance JWT (one credential per extract) plus `irma_server_url` and `credentials`. `403 error:identity-mismatch` explains which of date of birth, surname and given names differed. |
 | `GET /api/health` | Health check. |
