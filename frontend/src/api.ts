@@ -1,4 +1,12 @@
-import { ErrorResponse, UploadResponse } from './types';
+import { ErrorResponse, FrontendConfig, UploadResponse } from './types';
+
+/**
+ * Multipart field that carries the Cloudflare Turnstile token, and the action
+ * the widget is rendered with. Both must match what the backend expects (see
+ * backend/turnstile.go).
+ */
+export const TURNSTILE_TOKEN_FIELD = 'cf-turnstile-response';
+export const TURNSTILE_ACTION_UPLOAD = 'diploma-upload';
 
 /**
  * ApiError carries the structured error body of the backend so pages can
@@ -58,12 +66,35 @@ async function parseError(response: Response): Promise<ApiError> {
 }
 
 /**
+ * Fetches the frontend settings. A failure is reported as "no Turnstile":
+ * the upload then goes out without a token and the backend answers with
+ * error:bot-check-failed if it does require one.
+ */
+export async function fetchConfig(): Promise<FrontendConfig> {
+  try {
+    const response = await fetch('/api/config');
+    if (!response.ok) {
+      return { turnstile_site_key: '' };
+    }
+    const parsed = await response.json();
+    return { turnstile_site_key: typeof parsed?.turnstile_site_key === 'string' ? parsed.turnstile_site_key : '' };
+  } catch {
+    return { turnstile_site_key: '' };
+  }
+}
+
+/**
  * Uploads one or more diploma extracts in a single request. The backend
  * verifies and reads every file and answers per file; the request as a whole
  * only fails when no file was accepted (or when the request is malformed).
+ * With the Cloudflare Turnstile check on, a fresh single-use token travels
+ * along; leave it out when the check is disabled.
  */
-export async function uploadDiplomas(files: File[], signal?: AbortSignal): Promise<UploadResponse> {
+export async function uploadDiplomas(files: File[], signal?: AbortSignal, turnstileToken?: string): Promise<UploadResponse> {
   const form = new FormData();
+  if (turnstileToken) {
+    form.append(TURNSTILE_TOKEN_FIELD, turnstileToken);
+  }
   for (const file of files) {
     form.append('file', file, file.name);
   }

@@ -87,6 +87,23 @@ h1 {
 	margin: auto;
 }
 
+.turnstile {
+	margin-top: 16px;
+}
+
+.turnstile-explanation {
+	font-size: 0.9em;
+}
+
+.turnstile-widget {
+	min-height: 65px;
+}
+
+.turnstile-error {
+	color: #C30025;
+	font-weight: bold;
+}
+
 .alert {
 	max-width: 600px;
 	margin: 16px auto 16px auto;

@@ -42,6 +42,10 @@ type Config struct {
 	// Where the trust anchors for the signature verification come from.
 	Trust      diploma.TrustConfig `json:"trust"`
 	Validation ValidationConfig    `json:"validation"`
+	// Cloudflare Turnstile bot check on the upload endpoint. Enabled when a
+	// secret is configured here or in the TURNSTILE_SECRET environment
+	// variable; see TurnstileConfig.
+	Turnstile TurnstileConfig `json:"turnstile"`
 	// Maximum accepted size of one uploaded PDF in bytes. Defaults to 5 MiB.
 	MaxUploadSizeBytes int64 `json:"max_upload_size_bytes"`
 	// Maximum number of extracts in one upload. Defaults to 10.
@@ -137,6 +141,19 @@ func main() {
 	validator := diploma.NewPadesValidator(trustStore, config.Validation.Ocsp, nil)
 	slog.Info("using signature verification", "trust", trustStore.Description(), "ocsp", validator.OCSP())
 
+	var turnstile TurnstileVerifier
+	if config.Turnstile.Enabled() {
+		cf, err := NewCloudflareTurnstile(config.Turnstile)
+		if err != nil {
+			slog.Error("invalid turnstile configuration", "error", err)
+			os.Exit(1)
+		}
+		turnstile = cf
+		slog.Info("Cloudflare Turnstile check enabled on the upload endpoint", "site_key", config.Turnstile.SiteKey, "action", TurnstileActionUpload, "hostnames", cf.Hostnames())
+	} else {
+		slog.Warn("Cloudflare Turnstile check disabled: no secret configured, uploads are not protected against bots")
+	}
+
 	serverState := ServerState{
 		irmaServerURL:       config.IrmaServerUrl,
 		sessionStorage:      sessionStorage,
@@ -147,6 +164,8 @@ func main() {
 		identityCredentials: config.IdentityCredentials,
 		maxUploadSize:       config.MaxUploadSizeBytes,
 		maxFiles:            config.MaxFiles,
+		turnstile:           turnstile,
+		turnstileSiteKey:    config.Turnstile.SiteKey,
 	}
 
 	server, err := NewServer(&serverState, config.ServerConfig)

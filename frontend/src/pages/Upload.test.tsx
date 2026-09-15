@@ -1,26 +1,36 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '../i18n';
 import { AppProvider } from '../AppContext';
-import { ApiError, uploadDiplomas } from '../api';
+import { ApiError, fetchConfig, uploadDiplomas } from '../api';
+import { TurnstileApi, TurnstileError, TurnstileRenderOptions, loadTurnstile } from '../turnstile';
 import { FileResult, UploadResponse } from '../types';
 import UploadPage from './Upload';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
-  return { ...actual, uploadDiplomas: vi.fn() };
+  return { ...actual, uploadDiplomas: vi.fn(), fetchConfig: vi.fn() };
+});
+
+vi.mock('../turnstile', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../turnstile')>();
+  return { ...actual, loadTurnstile: vi.fn() };
 });
 
 const uploadMock = vi.mocked(uploadDiplomas);
+const configMock = vi.mocked(fetchConfig);
+const loadTurnstileMock = vi.mocked(loadTurnstile);
 
 /** A controllable upload: the test decides when and how it ends. */
 function pendingUpload() {
   let files: File[] = [];
+  let token: string | undefined;
   let finish!: (result: UploadResponse) => void;
   let fail!: (err: unknown) => void;
-  uploadMock.mockImplementation((picked) => {
+  uploadMock.mockImplementation((picked, _signal, turnstileToken) => {
     files = picked;
+    token = turnstileToken;
     return new Promise((resolve, reject) => {
       finish = resolve;
       fail = reject;
@@ -29,6 +39,9 @@ function pendingUpload() {
   return {
     get files() {
       return files;
+    },
+    get token() {
+      return token;
     },
     finish: (result: UploadResponse) => finish(result),
     fail: (err: unknown) => fail(err),
@@ -80,10 +93,26 @@ async function pick(...files: File[]) {
 }
 
 describe('UploadPage', () => {
+  beforeEach(() => {
+    // Bot check off: the page uploads without a Turnstile token.
+    configMock.mockResolvedValue({ turnstile_site_key: '' });
+  });
+
   afterEach(() => {
     // vitest runs without globals, so Testing Library does not clean up by itself.
     cleanup();
     uploadMock.mockReset();
+    configMock.mockReset();
+  });
+
+  it('does not render the bot check when the backend has it disabled', async () => {
+    const upload = pendingUpload();
+    renderPage();
+    await pick(havo);
+    fireEvent.click(screen.getByRole('button', { name: /uploaden en controleren/i }));
+    await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('turnstile-widget')).not.toBeInTheDocument();
+    expect(upload.token).toBeUndefined();
   });
 
   it('explains where to get the extracts and how they are checked', () => {
@@ -184,5 +213,102 @@ describe('UploadPage', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('De handtekeningcontrole is tijdelijk niet beschikbaar');
     expect(alert).toHaveTextContent('Dit ligt niet aan je bestanden.');
+  });
+});
+
+describe('UploadPage with the Cloudflare Turnstile check on', () => {
+  let renderOptions: TurnstileRenderOptions | undefined;
+  const api: TurnstileApi = {
+    render: vi.fn((_container, opts) => {
+      renderOptions = opts;
+      return 'widget-1';
+    }),
+    reset: vi.fn(),
+    remove: vi.fn(),
+    getResponse: vi.fn(),
+  };
+
+  beforeEach(() => {
+    configMock.mockResolvedValue({ turnstile_site_key: '0x4AAAAAAEskYIZQOLbu1QvE' });
+    loadTurnstileMock.mockResolvedValue(api);
+  });
+
+  afterEach(() => {
+    cleanup();
+    uploadMock.mockReset();
+    configMock.mockReset();
+    loadTurnstileMock.mockReset();
+    vi.mocked(api.render).mockClear();
+    vi.mocked(api.reset).mockClear();
+    renderOptions = undefined;
+  });
+
+  async function renderWithWidget() {
+    renderPage();
+    await waitFor(() => expect(api.render).toHaveBeenCalledTimes(1));
+  }
+
+  it('renders the widget for the upload action and sends its token with the upload', async () => {
+    const upload = pendingUpload();
+    await renderWithWidget();
+    expect(renderOptions).toMatchObject({ sitekey: '0x4AAAAAAEskYIZQOLbu1QvE', action: 'diploma-upload', language: 'nl' });
+    expect(screen.getByText(/Cloudflare Turnstile/)).toBeInTheDocument();
+
+    await pick(havo);
+    fireEvent.click(screen.getByRole('button', { name: /uploaden en controleren/i }));
+
+    // The widget has not answered yet: the page waits for the bot check and
+    // does not upload without a token.
+    expect(await screen.findByRole('status')).toHaveTextContent('botcontrole');
+    expect(uploadMock).not.toHaveBeenCalled();
+
+    act(() => renderOptions!.callback?.('token-1'));
+    await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(1));
+    expect(upload.token).toBe('token-1');
+    expect(upload.files.map((f) => f.name)).toEqual(['havo.pdf']);
+    expect(screen.getByRole('status')).toHaveTextContent('Het uittreksel wordt gecontroleerd...');
+
+    // A rejected upload keeps the selection; the next attempt needs a fresh
+    // token, so the widget is reset.
+    upload.fail(new ApiError(422, { error: 'error:validation-failed', files: [rejectedFile('havo.pdf', 'error:validation-failed', 'cms_signature')] }));
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: /uploaden en controleren/i }));
+    await waitFor(() => expect(api.reset).toHaveBeenCalledWith('widget-1'));
+    act(() => renderOptions!.callback?.('token-2'));
+    await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(2));
+    expect(upload.token).toBe('token-2');
+  });
+
+  it('explains a failed bot check from the backend', async () => {
+    const upload = pendingUpload();
+    await renderWithWidget();
+    await pick(havo);
+    fireEvent.click(screen.getByRole('button', { name: /uploaden en controleren/i }));
+    act(() => renderOptions!.callback?.('token-1'));
+    await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(1));
+
+    upload.fail(new ApiError(403, { error: 'error:bot-check-failed' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('De botcontrole (Cloudflare Turnstile) kon niet worden bevestigd.');
+  });
+
+  it('explains a widget that cannot deliver a token, without uploading', async () => {
+    pendingUpload();
+    await renderWithWidget();
+    await pick(havo);
+    fireEvent.click(screen.getByRole('button', { name: /uploaden en controleren/i }));
+    await screen.findByRole('status');
+
+    act(() => {
+      renderOptions!['error-callback']?.('300010');
+    });
+
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts.map((a) => a.textContent).join(' ')).toContain('challenges.cloudflare.com');
+    expect(uploadMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /uploaden en controleren/i })).toBeEnabled();
+    // Make sure the TurnstileError type is what the page checks for.
+    expect(new TurnstileError('300010')).toBeInstanceOf(Error);
   });
 });

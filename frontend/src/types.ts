@@ -47,6 +47,12 @@ export interface PersonInfo {
   date_of_birth: string;
 }
 
+/** Settings the backend hands to the frontend (GET /api/config). */
+export interface FrontendConfig {
+  /** Cloudflare Turnstile sitekey; empty when the bot check is disabled. */
+  turnstile_site_key: string;
+}
+
 export interface UploadResponse {
   session_id: string;
   person: PersonInfo;

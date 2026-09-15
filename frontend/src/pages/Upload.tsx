@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../AppContext';
-import { ApiError, UploadCancelled, isVerificationUnavailable, uploadDiplomas } from '../api';
+import { ApiError, TURNSTILE_ACTION_UPLOAD, UploadCancelled, fetchConfig, isVerificationUnavailable, uploadDiplomas } from '../api';
 import { MAX_FILES, checkPdfFile, fileCheckErrorKey } from '../fileCheck';
+import { TurnstileError } from '../turnstile';
 import FileDropzone from '../components/FileDropzone';
+import Turnstile, { TurnstileHandle } from '../components/Turnstile';
 import FileCard from './DocumentSummary';
 import { FileResult } from '../types';
 
@@ -18,6 +20,24 @@ export default function UploadPage() {
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [rejected, setRejected] = useState<FileResult[]>([]);
   const abortRef = useRef<AbortController | undefined>(undefined);
+  // Cloudflare Turnstile: the backend says whether the check is on and with
+  // which sitekey. The widget itself lives in the Turnstile component; this
+  // page only asks it for a token per upload attempt.
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | undefined>();
+  const [awaitingToken, setAwaitingToken] = useState(false);
+  const turnstileRef = useRef<TurnstileHandle>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchConfig().then((config) => {
+      if (!cancelled) {
+        setTurnstileSiteKey(config.turnstile_site_key);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Leaving the page cancels an upload still in progress.
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -71,13 +91,28 @@ export default function UploadPage() {
     setBusy(true);
     clearMessages();
     try {
-      const result = await uploadDiplomas(files, controller.signal);
+      // With the bot check on, every attempt needs its own single-use token.
+      let token: string | undefined;
+      if (turnstileSiteKey) {
+        setAwaitingToken(true);
+        try {
+          token = await turnstileRef.current!.getToken();
+        } finally {
+          setAwaitingToken(false);
+        }
+        if (controller.signal.aborted) {
+          throw new UploadCancelled();
+        }
+      }
+      const result = await uploadDiplomas(files, controller.signal, token);
       setUpload(result);
     } catch (err) {
       if (err instanceof UploadCancelled) {
         return;
       }
-      if (isVerificationUnavailable(err)) {
+      if (err instanceof TurnstileError) {
+        setErrorMessage(t('error_bot_check_unavailable'));
+      } else if (isVerificationUnavailable(err)) {
         setErrorMessage(t('upload_verification_unavailable'));
       } else if (err instanceof ApiError) {
         setErrorMessage(err.body.files && err.body.files.length > 0 ? t('upload_all_rejected', { count: err.body.files.length }) : t(err.translationKey));
@@ -152,7 +187,7 @@ export default function UploadPage() {
           {busy && (
             <div id="status-bar" className="alert alert-info" role="status">
               <div className="status-container">
-                <div id="status">{t('upload_busy', { count: files.length })}</div>
+                <div id="status">{awaitingToken ? t('upload_bot_check_waiting') : t('upload_busy', { count: files.length })}</div>
               </div>
             </div>
           )}
@@ -164,6 +199,7 @@ export default function UploadPage() {
           </p>
           <label htmlFor="diploma-files">{t('upload_file_label')}</label>
           <FileDropzone files={files} errors={fileErrors} disabled={busy} onAdd={add} onRemove={remove} />
+          {turnstileSiteKey && <Turnstile ref={turnstileRef} siteKey={turnstileSiteKey} action={TURNSTILE_ACTION_UPLOAD} />}
           {rejected.length > 0 && (
             <div className="file-cards">
               {rejected.map((file, index) => <FileCard key={`${file.filename}-${index}`} file={file} />)}

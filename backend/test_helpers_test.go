@@ -178,6 +178,9 @@ type testDeps struct {
 	parser    fakeParser
 	jwt       *fakeJwtCreator
 	irma      *fakeIrmaClient
+	// Turnstile verifier; nil (the default) leaves the bot check off.
+	turnstile        TurnstileVerifier
+	turnstileSiteKey string
 }
 
 func defaultDeps() *testDeps {
@@ -203,6 +206,8 @@ func startTestServer(t *testing.T, deps *testDeps) *Server {
 		identityCredentials: testIdentityCredentials,
 		maxUploadSize:       1 << 20,
 		maxFiles:            3,
+		turnstile:           deps.turnstile,
+		turnstileSiteKey:    deps.turnstileSiteKey,
 	}
 
 	srv, err := NewServer(state, testConfig)

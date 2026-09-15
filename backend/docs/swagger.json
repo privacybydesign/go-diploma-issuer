@@ -14,6 +14,26 @@
     },
     "basePath": "/api",
     "paths": {
+        "/config": {
+            "get": {
+                "description": "Returns the settings the frontend needs: the Cloudflare Turnstile sitekey to render the bot check on the upload page. The sitekey is empty when the Turnstile check is disabled; the frontend then uploads without a token.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Config"
+                ],
+                "summary": "Frontend configuration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ConfigResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/diploma/issue": {
             "post": {
                 "description": "Fetches the result of the disclosure session, compares the disclosed name and date of birth with the holder named on the extracts and, when they match, returns a signed IRMA issuance request with one diploma credential per accepted extract (IRMA and SD-JWT VC formats, issued over the IRMA protocol in a single session). On a mismatch the disclosure is discarded and the user may disclose again with another credential; the uploaded extracts stay available until the session expires.",
@@ -144,7 +164,7 @@
         },
         "/diploma/upload": {
             "post": {
-                "description": "Accepts one or more diploma extract PDFs from DUO's \"Mijn diploma's\" (repeat the multipart form field \"file\", at most max_files per request). Every file is verified cryptographically: the PDF must carry a single certification signature that covers the whole file, the signature must be valid, timestamped by a qualified timestamp authority and made with a qualified electronic seal certificate of DUO that chains to a trust service on the EU Trusted Lists. Only then is the printed data read (qualification, holder, date of birth, institution, award date, level). All accepted extracts must name the same holder. Files that fail are reported per file; as long as one file is accepted the request succeeds and a session is created for the accepted files. The session expires after one hour.",
+                "description": "Accepts one or more diploma extract PDFs from DUO's \"Mijn diploma's\" (repeat the multipart form field \"file\", at most max_files per request). Every file is verified cryptographically: the PDF must carry a single certification signature that covers the whole file, the signature must be valid, timestamped by a qualified timestamp authority and made with a qualified electronic seal certificate of DUO that chains to a trust service on the EU Trusted Lists. Only then is the printed data read (qualification, holder, date of birth, institution, award date, level). All accepted extracts must name the same holder. Files that fail are reported per file; as long as one file is accepted the request succeeds and a session is created for the accepted files. The session expires after one hour. When the Cloudflare Turnstile check is enabled (see /config), the request must also carry a fresh Turnstile token in the multipart field \"cf-turnstile-response\"; the token is redeemed at Cloudflare before the files are looked at and can be used only once.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -162,6 +182,12 @@
                         "name": "file",
                         "in": "formData",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Cloudflare Turnstile token from the widget on the upload page (required when the check is enabled)",
+                        "name": "cf-turnstile-response",
+                        "in": "formData"
                     }
                 ],
                 "responses": {
@@ -173,6 +199,12 @@
                     },
                     "400": {
                         "description": "no file, too many files, or none of the files is a PDF / a diploma extract (per-file detail in files)",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "the Turnstile token is missing, invalid, already used or not minted for this site",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -247,6 +279,16 @@
                 "ok": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "models.ConfigResponse": {
+            "type": "object",
+            "properties": {
+                "turnstile_site_key": {
+                    "description": "Sitekey of the Cloudflare Turnstile widget to render on the upload page. Empty when the bot check is disabled.",
+                    "type": "string",
+                    "example": "0x4AAAAAAEskYIZQOLbu1QvE"
                 }
             }
         },
