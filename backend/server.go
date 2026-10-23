@@ -286,8 +286,7 @@ func handleUpload(state *ServerState, w http.ResponseWriter, r *http.Request) {
 	bodyLimit := state.maxUploadSize*int64(state.maxFiles) + multipartOverhead
 	r.Body = http.MaxBytesReader(w, r.Body, bodyLimit)
 	if err := r.ParseMultipartForm(state.maxUploadSize); err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			respondWithErr(w, http.StatusRequestEntityTooLarge, ErrorFileTooLarge, "upload exceeds the size limit", err, "endpoint", endpoint)
 			return
 		}
