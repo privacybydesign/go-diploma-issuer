@@ -29,8 +29,9 @@ jobs:
       contents: read
     with:
       working-directory: backend
-      # go.mod targets Go 1.27; golangci-lint binaries before v2.13 are built with Go 1.26 and refuse it.
-      golangci-lint-version: v2.13.2
+      # go.mod targets Go 1.27. golangci-lint before v2.13 refuses Go 1.27, and v2.13.x cannot read
+      # the export data of Go 1.27.2+ (typecheck error in diploma/pdfsig); v2.14.0+ can.
+      golangci-lint-version: v2.15.0
       test-dockerfile: Dockerfile.test
       coverage-file: /coverage/coverage.out # Dockerfile.test writes here
       codecov: true
