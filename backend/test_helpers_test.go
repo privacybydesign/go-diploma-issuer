@@ -231,7 +231,7 @@ func startTestServer(t *testing.T, deps *testDeps) *Server {
 func waitUntilHealthy(t *testing.T, url string) {
 	t.Helper()
 	const maxAttempts = 50
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		if resp, err := http.Get(url); err == nil {
 			_ = resp.Body.Close()
 			return
